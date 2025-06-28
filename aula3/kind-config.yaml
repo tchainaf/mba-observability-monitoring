@@ -1,0 +1,12 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: aulatres-casa
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 31090
+        hostPort: 9090
+        protocol: TCP
+      - containerPort: 32000
+        hostPort: 3000
+        protocol: TCP 

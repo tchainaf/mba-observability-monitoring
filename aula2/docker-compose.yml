@@ -1,0 +1,84 @@
+version: '3'
+
+services:
+  zabbix-db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix
+      MYSQL_PASSWORD: zabbix
+      MYSQL_ROOT_PASSWORD: zabbix_root_pwd
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8 --collation-server=utf8_bin --log-bin-trust-function-creators=1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:ubuntu-6.0-latest
+    restart: always
+    ports:
+      - "10051:10051"
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix
+      MYSQL_PASSWORD: zabbix
+      ZBX_TIMEOUT: 30
+      ZBX_STARTPOLLERS: 5
+      ZBX_JAVAGATEWAY_ENABLE: "true"
+    depends_on:
+      zabbix-db:
+        condition: service_healthy
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-mysql:ubuntu-6.0-latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix
+      MYSQL_PASSWORD: zabbix
+      ZBX_SERVER_HOST: zabbix-server
+      PHP_TZ: America/Sao_Paulo
+      ZBX_SERVER_NAME: "Zabbix Lab"
+      PHP_FPM_PM_MAX_CHILDREN: 50
+      PHP_FPM_PM_START_SERVERS: 5
+      PHP_FPM_PM_MIN_SPARE_SERVERS: 5
+      PHP_FPM_PM_MAX_SPARE_SERVERS: 35
+    depends_on:
+      - zabbix-server
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:ubuntu-6.0-latest
+    restart: always
+    privileged: true
+    ports:
+      - "10050:10050"
+    environment:
+      ZBX_HOSTNAME: "Lab-Docker-Agent"
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_DEBUGLEVEL: 4
+      ZBX_LISTENIP: "0.0.0.0"
+      ZBX_LISTENPORT: 10050
+      ZBX_ALLOWKEY: "system.run[*]"
+      ZBX_SERVER: "zabbix-server"
+      ZBX_SERVERACTIVE: "zabbix-server:10051"
+    depends_on:
+      - zabbix-server
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
+volumes:
+  mysql-data: 
