@@ -1,0 +1,59 @@
+version: '3.8'
+
+networks:
+  jaeger:
+    driver: bridge
+
+services:
+  # Jaeger All-in-One - Configuração simples para demo
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: jaeger-simple
+    ports:
+      - "16686:16686"        # Web UI
+      - "14268:14268"        # Collector HTTP
+      - "6831:6831/udp"      # Thrift binary
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - JAEGER_DISABLED=false
+      - SPAN_STORAGE_TYPE=memory
+    networks:
+      - jaeger
+    restart: unless-stopped
+
+  # HotROD - Aplicação de exemplo
+  hotrod:
+    image: jaegertracing/example-hotrod:1.54
+    container_name: hotrod-simple
+    ports:
+      - "8080:8080"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - JAEGER_AGENT_HOST=jaeger
+      - JAEGER_AGENT_PORT=6831
+    networks:
+      - jaeger
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # Gerador de carga simples
+  load-generator:
+    image: curlimages/curl:8.5.0
+    container_name: load-gen
+    networks:
+      - jaeger
+    depends_on:
+      - hotrod
+    command: >
+      sh -c "
+        echo 'Aguardando serviços ficarem prontos...' &&
+        sleep 30 &&
+        echo 'Iniciando geração de traces...' &&
+        while true; do
+          curl -s http://hotrod:8080/dispatch?customer=123 > /dev/null || true
+          curl -s http://hotrod:8080/dispatch?customer=456 > /dev/null || true
+          sleep 3
+        done
+      "
+    restart: unless-stopped 
